@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from ai.summarizer import summarize, template_brief
 from database import (create_run, fetch_all_decisions, fetch_all_incidents,
@@ -119,6 +120,24 @@ def summarize_incident(incident_id: str):
     brief = summarize(incident)
     update_incident_brief(incident_id, brief)
     return {"ai_brief": brief}
+
+
+class BriefEdit(BaseModel):
+    ai_brief: str
+
+
+@app.put("/api/incidents/{incident_id}/brief")
+def edit_brief(incident_id: str, body: BriefEdit):
+    """Save an analyst's manual edit to the brief. Not one of the
+    blueprint's original 6 endpoints, but the design rule 'analyst can edit
+    the brief' (section 7) needs a write path, and only the backend's
+    service key may write to `incidents` (see the Phase 3 RLS gap) - so
+    this is a small, narrow endpoint in the same spirit as /summarize."""
+    incident = fetch_incident(incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    update_incident_brief(incident_id, body.ai_brief)
+    return {"ai_brief": body.ai_brief}
 
 
 @app.get("/api/metrics")

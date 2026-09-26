@@ -1,0 +1,26 @@
+{
+  "port_scan": { "technique": "T1046", "name": "Network Service Discovery", "tactic": "Discovery" },
+  "phishing_link_click": { "technique": "T1566", "name": "Phishing", "tactic": "Initial Access" },
+  "failed_login_burst": { "technique": "T1110", "name": "Brute Force", "tactic": "Credential Access" },
+  "login_after_failures": { "technique": "T1078", "name": "Valid Accounts", "tactic": "Initial Access" },
+  "macro_execution": { "technique": "T1204", "name": "User Execution", "tactic": "Execution" },
+  "powershell_exec": { "technique": "T1059.001", "name": "PowerShell", "tactic": "Execution" },
+  "scheduled_task_created": { "technique": "T1053", "name": "Scheduled Task/Job", "tactic": "Persistence" },
+  "credential_dump": { "technique": "T1003", "name": "OS Credential Dumping", "tactic": "Credential Access" },
+  "remote_login": { "technique": "T1021", "name": "Remote Services", "tactic": "Lateral Movement" },
+  "admin_group_change": { "technique": "T1098", "name": "Account Manipulation", "tactic": "Persistence" },
+  "beacon_external": { "technique": "T1071", "name": "Application Layer Protocol", "tactic": "Command and Control" },
+  "large_upload_external": { "technique": "T1041", "name": "Exfiltration Over C2 Channel", "tactic": "Exfiltration" },
+
+  "unusual_file_access": { "technique": "T1005", "name": "Data from Local System", "tactic": "Collection" },
+
+  "single_failed_login": { "technique": null, "name": null, "tactic": null },
+  "av_scan_clean": { "technique": null, "name": null, "tactic": null },
+  "blocked_port_scan": { "technique": "T1046", "name": "Network Service Discovery", "tactic": "Discovery" },
+  "software_update": { "technique": null, "name": null, "tactic": null },
+  "password_change": { "technique": null, "name": null, "tactic": null },
+  "file_access_normal": { "technique": null, "name": null, "tactic": null },
+  "vpn_login_normal": { "technique": null, "name": null, "tactic": null },
+  "vpn_login_new_city": { "technique": "T1078", "name": "Valid Accounts", "tactic": "Initial Access" },
+  "large_backup_upload": { "technique": null, "name": null, "tactic": null }
+}

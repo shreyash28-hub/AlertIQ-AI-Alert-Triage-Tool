@@ -98,7 +98,11 @@ def save_incidents(run_id: str, incidents: list[dict]) -> None:
 
 
 def fetch_incidents(level: str = None, status: str = None, technique: str = None) -> list[dict]:
-    q = get_client().table("incidents").select("*").order("risk_score", desc=True)
+    # embed the asset row via the primary_host -> assets(host) foreign key,
+    # so the dashboard table can show "asset + criticality" without a
+    # second round trip per incident
+    q = (get_client().table("incidents").select("*, asset:assets(host,type,owner,criticality)")
+         .order("risk_score", desc=True))
     if level:
         q = q.eq("risk_level", level)
     if status:

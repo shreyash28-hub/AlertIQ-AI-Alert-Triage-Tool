@@ -50,5 +50,11 @@ export const api = {
   summarizeIncident: (id: string) =>
     request<{ ai_brief: string }>(`/api/incidents/${id}/summarize`, { method: "POST" }),
 
+  editBrief: (id: string, ai_brief: string) =>
+    request<{ ai_brief: string }>(`/api/incidents/${id}/brief`, {
+      method: "PUT",
+      body: JSON.stringify({ ai_brief }),
+    }),
+
   getMetrics: () => request<Metrics>("/api/metrics"),
 }

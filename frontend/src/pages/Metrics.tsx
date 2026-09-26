@@ -1,10 +1,10 @@
-// Placeholder: Phase 6 builds the full page (before/after chart, noise
-// funnel, detection check, decision breakdown). This proves the /api/metrics
-// call works end to end.
-
 import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api"
+import { CheckCircle2, XCircle } from "lucide-react"
+import { DecisionBreakdownChart } from "@/components/charts/DecisionBreakdownChart"
+import { MtttChart } from "@/components/charts/MtttChart"
+import { NoiseFunnelChart } from "@/components/charts/NoiseFunnelChart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { api } from "@/lib/api"
 
 export default function Metrics() {
   const { data, isLoading, isError } = useQuery({
@@ -15,32 +15,54 @@ export default function Metrics() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>
   if (isError || !data) return <p className="text-sm text-destructive">Could not load metrics.</p>
 
+  const [foundStr, plantedStr] = data.planted_attacks_in_top5.split("/")
+  const allFound = foundStr === plantedStr
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Metrics</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <div>
-            <p className="text-muted-foreground">Alerts</p>
-            <p className="font-mono text-lg">{data.total_alerts}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Incidents</p>
-            <p className="font-mono text-lg">{data.total_incidents}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Noise reduced</p>
-            <p className="font-mono text-lg">{data.noise_reduction_pct}%</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Planted attacks in top 5</p>
-            <p className="font-mono text-lg">{data.planted_attacks_in_top5}</p>
-          </div>
-        </CardContent>
-      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Triage time: manual vs AlertIQ</CardTitle></CardHeader>
+          <CardContent>
+            <MtttChart manualHours={data.mttt_manual_hours} toolHours={data.mttt_tool_hours} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Noise funnel</CardTitle></CardHeader>
+          <CardContent>
+            <NoiseFunnelChart
+              totalAlerts={data.total_alerts}
+              totalIncidents={data.total_incidents}
+              criticalCount={data.by_level.critical}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Detection check</CardTitle></CardHeader>
+          <CardContent className="flex items-center gap-3">
+            {allFound ? (
+              <CheckCircle2 className="size-8 text-green-500" />
+            ) : (
+              <XCircle className="size-8 text-risk-high" />
+            )}
+            <div>
+              <p className="font-mono text-2xl font-semibold">{data.planted_attacks_in_top5}</p>
+              <p className="text-sm text-muted-foreground">planted attacks ranked in the top 5</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Analyst decisions</CardTitle></CardHeader>
+          <CardContent>
+            <DecisionBreakdownChart decisions={data.decisions} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

@@ -27,7 +27,8 @@ export interface Alert {
   is_true_positive: boolean
 }
 
-// The shape GET /api/incidents returns (list view).
+// The shape GET /api/incidents returns (list view). `asset` is embedded via
+// the primary_host -> assets(host) foreign key (see database.py).
 export interface Incident {
   incident_id: string
   title: string
@@ -45,9 +46,10 @@ export interface Incident {
   analyst_note: string | null
   decided_at: string | null
   contains_planted_attack: boolean
+  asset?: Asset | null
 }
 
-// GET /api/incidents/{id} adds the joined alerts and asset.
+// GET /api/incidents/{id} adds the joined alerts.
 export interface IncidentDetail extends Incident {
   alerts: Alert[]
   asset: Asset | null
