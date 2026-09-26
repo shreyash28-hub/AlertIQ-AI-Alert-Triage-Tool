@@ -43,9 +43,17 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - **Gap 5 resolved:** only the backend's service key can write `incidents`, but a narrow `SECURITY DEFINER` trigger on `decisions` updates exactly `status`/`analyst_note`/`decided_at` when an analyst records a decision — no wider incidents-write policy needed. Verified live: inserting a decision moved an incident from New → Confirmed with the note and timestamp copied correctly.
 - **Verified end to end against the live database:** `/api/generate` → 2,971 alerts; `/api/ingest` → 38 incidents (matches Phase 2 exactly); all read endpoints, filters, and `/api/metrics` return correct live data.
 
+### Phase 4 — AI summaries ✅
+- `backend/ai/summarizer.py`: `ollama_brief()` calls Phi-4-mini with the blueprint's exact prompt (temperature 0.2); `summarize()` tries it and falls back to `template_brief()` on any failure — Ollama down, unreachable, timeout, or empty reply — so the demo never breaks.
+- `backend/main.py`: incidents beyond the top 20 now get a template brief too (design rule: "low incidents get a template brief", not no brief).
+- **Caching:** briefs are stored in `incidents.ai_brief`; confirmed live that repeated `GET /api/incidents/{id}` calls return the byte-identical stored brief in under a second — no repeated AI calls on refresh.
+- **Two data-quality bugs found and fixed against real model output:**
+  - The prompt sent `mitre_techniques` and `kill_chain_stages` as two separately-sorted lists; phi4-mini paired them up itself and got it wrong (e.g. called T1041 "Initial Access" instead of Exfiltration). Fixed by sending explicit `{technique, tactic}` pairs derived from `mitre_map.json`.
+  - A "routine activity" rollup incident (Phase 2's noise rollup) still has individual alert techniques attached even though its tactics are forced empty; asking the model to narrate a "multi-stage attack" for one invited it to hallucinate a story *and fake technique codes that don't exist in our data* (observed: phi4-mini invented T1186/T1220). Fixed by detecting a rollup (techniques present, tactics empty — a reliable signal since every real technique in `mitre_map.json` has a tactic) and routing it straight to the template brief, skipping the AI call. Also fixed `template_brief()` to recognize the database's `techniques` column name, not just the engine's `mitre_techniques` key.
+- **Verified end to end:** full `/api/ingest` run — of the top 20 incidents, exactly the 4 real planted attacks got a genuine AI brief (24–28s each, correct technique/tactic pairing every time) and the other 16 (routine rollups) correctly got the instant template. 0 hallucinated technique codes anywhere in the top 20. Ingest time dropped from 8m15s (AI for all 20) to 1m9s once routine incidents were routed to the template. Fallback tested directly with an unreachable Ollama URL — falls back immediately, exactly as it would from a deployed Azure backend.
+
 ## Remaining
 
-- [ ] **Phase 4 — AI summaries**: Phi-4-mini briefs via Ollama, caching, fallback template.
 - [ ] **Phase 5 — Frontend base**: Vite + React + TS + Tailwind + shadcn, layout, API client.
 - [ ] **Phase 6 — Full UI**: Dashboard, Incident detail, Metrics pages, charts, decision buttons.
 - [ ] **Phase 7 — Animations**: Motion count-ups, list transitions, attack chain, collapse effect.
