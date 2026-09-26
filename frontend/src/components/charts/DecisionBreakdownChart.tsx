@@ -18,6 +18,8 @@ export function DecisionBreakdownChart({ decisions }: { decisions: Metrics["deci
     { name: "Pending", value: decisions.pending },
   ].filter((d) => d.value > 0)
 
+  const total = data.reduce((sum, d) => sum + d.value, 0) || 1
+
   if (data.length === 0) {
     return <p className="text-sm text-muted-foreground">No decisions recorded yet.</p>
   }
@@ -25,7 +27,9 @@ export function DecisionBreakdownChart({ decisions }: { decisions: Metrics["deci
   return (
     <ResponsiveContainer width="100%" height={220}>
       <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+        {/* stroke matches the card background instead of Recharts' default
+            white, so slice dividers don't flash white in dark mode */}
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2} stroke="var(--card)">
           {data.map((d) => (
             <Cell key={d.name} fill={COLORS[d.name]} />
           ))}
@@ -33,6 +37,7 @@ export function DecisionBreakdownChart({ decisions }: { decisions: Metrics["deci
         <Tooltip
           contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8 }}
           labelStyle={{ color: "var(--foreground)" }}
+          formatter={(value) => [`${Math.round((Number(value) / total) * 100)}%`, "Share"]}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
       </PieChart>

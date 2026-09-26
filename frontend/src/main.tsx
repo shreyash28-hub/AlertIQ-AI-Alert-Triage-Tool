@@ -6,21 +6,24 @@ import App from "./App.tsx"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AuthProvider } from "@/lib/auth"
+import { ThemeProvider } from "@/lib/theme"
 import "./index.css"
 
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-          <Toaster position="bottom-right" />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+            <Toaster position="bottom-right" />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

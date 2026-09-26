@@ -55,7 +55,7 @@ export default function IncidentDetail() {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-destructive">Incident not found.</p>
-        <Button variant="outline" onClick={() => navigate("/")} className="w-fit">
+        <Button variant="outline" onClick={() => navigate("/app")} className="w-fit">
           <ArrowLeft className="size-4" /> Back to dashboard
         </Button>
       </div>
@@ -64,7 +64,7 @@ export default function IncidentDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link to="/" className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/app" className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Dashboard
       </Link>
 

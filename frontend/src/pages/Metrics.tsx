@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { DecisionBreakdownChart } from "@/components/charts/DecisionBreakdownChart"
+import { IncidentsByOwnerChart } from "@/components/charts/IncidentsByOwnerChart"
 import { MtttChart } from "@/components/charts/MtttChart"
 import { NoiseFunnelChart } from "@/components/charts/NoiseFunnelChart"
+import { RiskScoreDistributionChart } from "@/components/charts/RiskScoreDistributionChart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { api } from "@/lib/api"
 
@@ -10,6 +12,11 @@ export default function Metrics() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["metrics"],
     queryFn: () => api.getMetrics(),
+  })
+
+  const { data: incidents } = useQuery({
+    queryKey: ["incidents", "all"],
+    queryFn: () => api.listIncidents(),
   })
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>
@@ -60,6 +67,20 @@ export default function Metrics() {
           <CardHeader><CardTitle className="text-base">Analyst decisions</CardTitle></CardHeader>
           <CardContent>
             <DecisionBreakdownChart decisions={data.decisions} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Risk score distribution</CardTitle></CardHeader>
+          <CardContent>
+            <RiskScoreDistributionChart incidents={incidents ?? []} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Incidents by asset owner</CardTitle></CardHeader>
+          <CardContent>
+            <IncidentsByOwnerChart incidents={incidents ?? []} />
           </CardContent>
         </Card>
       </div>

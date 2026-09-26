@@ -17,7 +17,13 @@ export function useIncidentsRealtime() {
       .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, () => {
         queryClient.invalidateQueries({ queryKey: ["incidents"] })
         queryClient.invalidateQueries({ queryKey: ["incident"] })
-        queryClient.invalidateQueries({ queryKey: ["metrics"] })
+        // NOT ["metrics"] here: a triage run inserts an empty triage_runs
+        // row (create_run) before it fills in total_alerts (finish_run),
+        // and this handler fires the instant incidents rows are upserted -
+        // which can land inside that window and briefly show total_alerts
+        // as 0 (found in testing: stat cards flashed "-1.3h" mid-ingest).
+        // Dashboard already refetches metrics explicitly once ingest()
+        // resolves, when the numbers are guaranteed final.
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "decisions" }, () => {
         queryClient.invalidateQueries({ queryKey: ["metrics"] })

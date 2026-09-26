@@ -34,6 +34,7 @@ export function NoiseFunnelChart({
           width={70}
         />
         <Tooltip
+          cursor={{ fill: "var(--muted)", opacity: 0.4 }}
           contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8 }}
           labelStyle={{ color: "var(--foreground)" }}
         />

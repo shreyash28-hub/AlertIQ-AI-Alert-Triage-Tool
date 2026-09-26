@@ -2,19 +2,35 @@
 read and write the database (see supabase/migrations/001_schema.sql)."""
 
 import os
-from functools import lru_cache
+import time
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
 load_dotenv()
 
+# A client cached forever (the original @lru_cache) holds one long-lived
+# httpx connection that Supabase's server can close after being idle for a
+# while; httpx doesn't detect or retry a dead pooled connection, so every
+# call then fails with httpx.RemoteProtocolError("Server disconnected")
+# until the process restarts - found in testing after ~30 min of a long-
+# running dev server (mid multi-minute /api/ingest call, and even on plain
+# GETs afterward). A short TTL refreshes the client well before that idle
+# window, without paying the cost of reconnecting on every single call.
+_CLIENT_TTL_SECONDS = 240
+_client: Client | None = None
+_client_created_at: float = 0.0
 
-@lru_cache
+
 def get_client() -> Client:
-    url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    return create_client(url, key)
+    global _client, _client_created_at
+    now = time.monotonic()
+    if _client is None or (now - _client_created_at) > _CLIENT_TTL_SECONDS:
+        url = os.environ["SUPABASE_URL"]
+        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+        _client = create_client(url, key)
+        _client_created_at = now
+    return _client
 
 
 def _iso(value):
@@ -149,6 +165,12 @@ def fetch_all_decisions() -> list[dict]:
 
 
 def latest_run() -> dict | None:
+    # only a run that actually finished (finish_run() sets duration_ms) -
+    # create_run() inserts a stub row before the pipeline has run at all,
+    # and if the request fails partway through (e.g. the stale-connection
+    # bug above), that stub would otherwise look like "the latest run" with
+    # total_alerts=0, which briefly showed on the dashboard during testing.
     res = (get_client().table("triage_runs").select("*")
+           .not_.is_("duration_ms", "null")
            .order("started_at", desc=True).limit(1).execute())
     return res.data[0] if res.data else None

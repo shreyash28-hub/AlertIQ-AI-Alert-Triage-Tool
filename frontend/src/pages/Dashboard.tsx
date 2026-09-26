@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AlertTriangle, Clock, Layers, Loader2, Play, TrendingDown } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { IncidentTable, type IncidentFilterState } from "@/components/IncidentTable"
 import { StatCard } from "@/components/StatCard"
@@ -11,11 +11,20 @@ import { api } from "@/lib/api"
 import { useIncidentsRealtime } from "@/lib/useRealtime"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
+import type { Incident } from "@/types"
+
+// How long the "incidents pop in one by one" reveal takes to finish for a
+// large batch, so it stays satisfying (not a blur) without dragging on for
+// a big dataset - see revealIncidents() below.
+const REVEAL_TOTAL_MS = 2800
+const REVEAL_MIN_STEP_MS = 40
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const [filters, setFilters] = useState<IncidentFilterState>({ level: "", status: "", technique: "" })
   const [lastRun, setLastRun] = useState<{ started_at: string; total_alerts: number } | null>(null)
+  const [revealed, setRevealed] = useState<Incident[] | null>(null)
+  const revealTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useIncidentsRealtime()
 
@@ -26,6 +35,10 @@ export default function Dashboard() {
       .order("started_at", { ascending: false })
       .limit(1)
       .then(({ data }) => setLastRun(data?.[0] ?? null))
+  }, [])
+
+  useEffect(() => () => {
+    if (revealTimer.current) clearInterval(revealTimer.current)
   }, [])
 
   const { data: incidents, isLoading, isError, error } = useQuery({
@@ -49,11 +62,31 @@ export default function Dashboard() {
     queryFn: () => api.getMetrics(),
   })
 
+  function revealIncidents(full: Incident[]) {
+    if (revealTimer.current) clearInterval(revealTimer.current)
+    setRevealed([])
+    if (full.length === 0) {
+      setRevealed(null)
+      return
+    }
+    const step = Math.max(REVEAL_MIN_STEP_MS, Math.floor(REVEAL_TOTAL_MS / full.length))
+    let i = 0
+    revealTimer.current = setInterval(() => {
+      i += 1
+      setRevealed(full.slice(0, i))
+      if (i >= full.length) {
+        clearInterval(revealTimer.current!)
+        revealTimer.current = null
+        // hand off to the normal filtered query once the reveal finishes
+        setTimeout(() => setRevealed(null), 300)
+      }
+    }, step)
+  }
+
   const ingest = useMutation({
     mutationFn: () => api.ingest(),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       toast.success(`Triage complete: ${result.alerts.toLocaleString()} alerts -> ${result.incidents} incidents`)
-      queryClient.invalidateQueries({ queryKey: ["incidents"] })
       queryClient.invalidateQueries({ queryKey: ["metrics"] })
       supabase
         .from("triage_runs")
@@ -61,12 +94,21 @@ export default function Dashboard() {
         .order("started_at", { ascending: false })
         .limit(1)
         .then(({ data }) => setLastRun(data?.[0] ?? null))
+
+      // fetch the fresh, unfiltered, risk-sorted list and reveal it
+      // incident by incident - this is the "wow moment": incidents landing
+      // one after another instead of the table just snapping to 38 rows.
+      const fresh = await api.listIncidents()
+      queryClient.setQueryData(["incidents", "all"], fresh)
+      queryClient.setQueryData(["incidents", { level: "", status: "", technique: "" }], fresh)
+      revealIncidents(fresh)
     },
     onError: (err: Error) => toast.error(err.message),
   })
 
   const techniqueOptions = [...new Set((allIncidents ?? []).flatMap((i) => i.techniques))].sort()
   const triageTimeSavedHours = metrics ? metrics.mttt_manual_hours - metrics.mttt_tool_hours : 0
+  const displayIncidents = revealed ?? incidents
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,7 +121,7 @@ export default function Dashboard() {
               : "No triage run yet"}
           </p>
         </div>
-        <Button onClick={() => ingest.mutate()} disabled={ingest.isPending}>
+        <Button onClick={() => ingest.mutate()} disabled={ingest.isPending || revealed !== null}>
           {ingest.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
           Run triage
         </Button>
@@ -110,22 +152,22 @@ export default function Dashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Incidents {incidents ? `(${incidents.length})` : ""}
+            Incidents {displayIncidents ? `(${revealed ? `${revealed.length}/${incidents?.length ?? revealed.length}` : displayIncidents.length})` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-          {isError && (
+          {isLoading && !revealed && <p className="text-sm text-muted-foreground">Loading...</p>}
+          {isError && !revealed && (
             <p className="text-sm text-destructive">Could not reach the API: {(error as Error).message}</p>
           )}
-          {incidents && incidents.length === 0 && (
+          {displayIncidents && displayIncidents.length === 0 && (
             <p className="text-sm text-muted-foreground">
               No incidents match these filters. Click "Run triage" to generate and score them.
             </p>
           )}
-          {incidents && incidents.length > 0 && (
+          {displayIncidents && displayIncidents.length > 0 && (
             <IncidentTable
-              incidents={incidents}
+              incidents={displayIncidents}
               filters={filters}
               onFiltersChange={setFilters}
               techniqueOptions={techniqueOptions}
