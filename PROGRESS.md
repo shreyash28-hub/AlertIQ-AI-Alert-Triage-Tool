@@ -5,6 +5,7 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 **Locked decisions (changed after the original blueprint):**
 - AI: Ollama + Phi-4-mini only (no Grok, no Azure OpenAI).
 - Hosting: Azure Static Web Apps (frontend) + Azure App Service (backend). Vercel was considered and dropped.
+- Design: the blueprint's single fixed dark SOC theme was replaced (user request) with a livelier violet-accented palette and real light/dark/system theme support. Fixed red/orange/yellow/grey risk scale and Inter/JetBrains Mono fonts kept. Public routes now exist too: `/` is a marketing landing page, `/signup` lets anyone create an account; the app itself moved to `/app`.
 
 **Demo login:** a test analyst account (`analyst@alertiq.demo`) was created via the Supabase admin API in Phase 5, for local testing. Its password is not recorded here or in git, since this repo is public — reset it from the Supabase dashboard (Authentication → Users) if needed, or ask to create a fresh one. Delete this account before any public deployment.
 
@@ -68,6 +69,19 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - **`lib/useRealtime.ts`:** subscribes to the `incidents`/`decisions` Realtime publication and invalidates React Query caches — the dashboard updates live.
 - **Dashboard, IncidentDetail, Metrics** rewritten to their full versions per the blueprint's page specs.
 - **Verified live, including the exact checkpoint** ("analyst can open an incident and mark it False positive"): opened the insider attack incident, its attack chain correctly rendered Initial Access → Collection → Exfiltration; clicked False positive; confirmed directly in Supabase that the decision was recorded under the analyst's id and the Phase 3 trigger updated the status — and the UI badge updated live via Realtime with no page refresh. Also verified Edit-brief saves persist correctly. Re-ran `/api/ingest` afterward for a clean dataset. `npm run build` passes clean.
+
+### UI overhaul (user-requested, post-Phase 6) ✅
+- **Theme:** real light/dark/system support (`lib/theme.tsx`, `ThemeToggle.tsx`), persisted, flash-prevention script in `index.html`. Palette redesigned to a livelier violet-accented look in both themes (`index.css`), replacing the single fixed dark SOC theme — fixed risk-level colors and fonts kept.
+- **New public pages:** `Landing.tsx` (hero, stats, how-it-works, tech badges, CTA) and `Signup.tsx` (handles both a Supabase confirmation-required and immediate-session outcome). Routing restructured: `/` = landing, `/signup`, `/login` public; the app moved to `/app`, `/app/incidents/:id`, `/app/metrics`.
+- **Run triage now reveals incidents one by one** instead of the table snapping to the full list — Dashboard fetches the fresh ranked list after ingest and feeds it into the existing per-row animation incrementally.
+- **Sidebar enriched:** user profile card, pending-incident badge, "Live via Supabase Realtime" indicator, theme toggle.
+- **Metrics gained 2 more charts** (risk score distribution, incidents by asset owner — both from data already fetched), for 6 total.
+- **Chart hover fixed:** Recharts' default tooltip cursor / Pie stroke are hardcoded light colors (the reported "white background" on hover); now use theme tokens. Two tooltips (risk level, decision breakdown) now show percentage share instead of raw count.
+- **Three real bugs found and fixed while verifying live, beyond what was asked:**
+  1. `AppLayout` used `min-h-screen` instead of `h-screen overflow-hidden`, so the whole page scrolled at the body level instead of just the content area — dragging the sidebar (and its sign-out button) up and out of view. Fixed.
+  2. Landing page's scroll-triggered fade-ins (`whileInView` + `viewport={{once:true}}`) never fired in testing, leaving entire sections permanently invisible even though correctly in the DOM. Replaced with mount-time `animate`, which can't get stuck hidden.
+  3. **The serious one:** `database.py`'s Supabase client was cached forever (`@lru_cache`), holding one long-lived connection. After ~30 min of a running dev server, Supabase closed it; httpx doesn't retry a dead pooled connection, so every call — not just the long `/api/ingest` — started failing with `RemoteProtocolError`, and a failed-partway ingest left a stub `triage_runs` row (`total_alerts=0`) that the dashboard displayed as "latest run" (seen live: stat cards flashing "Total alerts: 0" / "-1.3h"). Fixed two ways: the client now refreshes every 4 minutes instead of forever, and `latest_run()` only considers a run that actually finished (`duration_ms is not null`), so a partial failure of any cause can't poison the dashboard again.
+- **Verified live:** landing page (all sections visible after the fix), theme toggle (light/dark), signup (both a rejected invalid email and a real signup reaching "check your email"), the fixed sidebar (stays put on scroll), Run triage's progressive reveal, all 6 Metrics charts, and a clean re-ingest after the connection fix completing in 66s with correct numbers immediately. `npm run build` passes clean. Test accounts cleaned up afterward.
 
 ## Remaining
 
