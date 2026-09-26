@@ -6,6 +6,8 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - AI: Ollama + Phi-4-mini only (no Grok, no Azure OpenAI).
 - Hosting: Azure Static Web Apps (frontend) + Azure App Service (backend). Vercel was considered and dropped.
 
+**Demo login:** a test analyst account (`analyst@alertiq.demo`) was created via the Supabase admin API in Phase 5, for local testing. Its password is not recorded here or in git, since this repo is public — reset it from the Supabase dashboard (Authentication → Users) if needed, or ask to create a fresh one. Delete this account before any public deployment.
+
 ## Done
 
 ### Phase 0 — Setup ✅
@@ -52,9 +54,16 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
   - A "routine activity" rollup incident (Phase 2's noise rollup) still has individual alert techniques attached even though its tactics are forced empty; asking the model to narrate a "multi-stage attack" for one invited it to hallucinate a story *and fake technique codes that don't exist in our data* (observed: phi4-mini invented T1186/T1220). Fixed by detecting a rollup (techniques present, tactics empty — a reliable signal since every real technique in `mitre_map.json` has a tactic) and routing it straight to the template brief, skipping the AI call. Also fixed `template_brief()` to recognize the database's `techniques` column name, not just the engine's `mitre_techniques` key.
 - **Verified end to end:** full `/api/ingest` run — of the top 20 incidents, exactly the 4 real planted attacks got a genuine AI brief (24–28s each, correct technique/tactic pairing every time) and the other 16 (routine rollups) correctly got the instant template. 0 hallucinated technique codes anywhere in the top 20. Ingest time dropped from 8m15s (AI for all 20) to 1m9s once routine incidents were routed to the template. Fallback tested directly with an unreachable Ollama URL — falls back immediately, exactly as it would from a deployed Azure backend.
 
+### Phase 5 — Frontend base ✅
+- `frontend/`: Vite + React 18 + TypeScript, Tailwind CSS v4 (via `@tailwindcss/vite` — the blueprint's `tailwind.config.ts` is a v3 artifact; v4 configures through the Vite plugin + CSS `@theme` instead, noted in `frontend/README.md`), shadcn/ui (button, card, table, badge, input, label, tabs, dialog, tooltip, separator).
+- Dark SOC theme in `src/index.css`: near-black background, slate cards, cyan accent, red/orange/yellow/grey risk scale as CSS variables, Inter + JetBrains Mono fonts.
+- `src/lib/api.ts` (FastAPI client), `src/lib/supabase.ts` + `auth.tsx` (Supabase client + session context, anon key only), `src/types/index.ts` (mirrors `backend/models.py`).
+- React Router (`/login`, `/`, `/incidents/:id`, `/metrics`, the last three behind `ProtectedRoute`) + TanStack Query.
+- `Dashboard.tsx`: real incident list with risk badges + working "Run triage" button. `IncidentDetail.tsx`/`Metrics.tsx` are working but minimal — Phase 6 builds their full versions.
+- **Verified live in a real browser** (`.claude/launch.json` added so the browser tool can run the Vite dev server): created a persistent demo login (`analyst@alertiq.demo`), confirmed the Phase 3 signup trigger fired; unauthenticated → redirected to `/login`; after login, Dashboard shows all 38 real incidents correctly sorted/badged; Metrics page shows live 98.7% reduction / 4/4 top-5; incident detail shows a real AI brief with correct technique pairing; sign-out works; `npm run build` passes clean.
+
 ## Remaining
 
-- [ ] **Phase 5 — Frontend base**: Vite + React + TS + Tailwind + shadcn, layout, API client.
 - [ ] **Phase 6 — Full UI**: Dashboard, Incident detail, Metrics pages, charts, decision buttons.
 - [ ] **Phase 7 — Animations**: Motion count-ups, list transitions, attack chain, collapse effect.
 - [ ] **Phase 8 — Metrics and pitch**: timed MTTT test, deploy to Azure, slides, demo video.
