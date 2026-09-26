@@ -14,10 +14,10 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - Ollama 0.34.4 installed; `phi4-mini` model pulled (2.5 GB) and tested from Python (~9s per call incl. load).
 - Backend Python venv created at `backend/venv`, all requirements installed and import-tested.
 - Git repo initialized, first commit pushed to [github.com/shreyash28-hub/AlertIQ-AI-Alert-Triage-Tool](https://github.com/shreyash28-hub/AlertIQ-AI-Alert-Triage-Tool) on `main`.
+- Supabase project created; `backend/.env` filled in (URL + service role key) and connection verified (Auth admin call succeeded).
 
 ## Remaining
 
-- [ ] **Supabase project** — create account/project, get URL + service role key, fill in `backend/.env` (not committed).
 - [ ] **Phase 1 — Synthetic data**: `backend/generator/generate_alerts.py`, `backend/data/assets.csv`, `backend/data/mitre_map.json`, ~3,000 alerts incl. 4–5 planted attacks. *Known gap to address here: the low-and-slow insider attack spans multiple nights — the 30-min correlation window may split it and it may miss the top-5 ranking.*
 - [ ] **Phase 2 — Triage engine**: normalize, correlate (grouping rule needs a fix so ~40 incidents come out, not hundreds), MITRE mapping, risk scoring.
 - [ ] **Phase 3 — Backend API**: Supabase schema + RLS (note: frontend needs to update `incidents.status`, current RLS draft blocks that) + Auth, FastAPI endpoints.
