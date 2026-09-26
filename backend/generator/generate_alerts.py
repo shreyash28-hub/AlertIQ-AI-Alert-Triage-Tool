@@ -132,13 +132,17 @@ def benign_noise(n: int, hosts: list[str]) -> list[dict]:
     for _ in range(n):
         alert_type, source, (lo, hi), tmpl = random.choice(kinds)
         user = fake.user_name()
-        ip = fake.ipv4_public()
+        # only a genuinely internet-facing event (a blocked scan) gets a
+        # public IP; internal-only actions (logins, AV, updates, file
+        # access) keep the default private address, so pure noise doesn't
+        # falsely trip the risk engine's "external IP" anomaly signal
+        ip = fake.ipv4_public() if alert_type == "blocked_port_scan" else None
         out.append(make_alert(
             host=random.choice(hosts), user=user, alert_type=alert_type, source=source,
             severity=random.randint(lo, hi),
             timestamp=ts(DEMO_DATE, random.uniform(0, 24 * 60)),
             src_ip=ip,
-            raw_message=tmpl.format(user=user, ip=ip),
+            raw_message=tmpl.format(user=user, ip=ip or ""),
         ))
     return out
 
@@ -259,21 +263,26 @@ def attack_lateral_movement_dc() -> list[dict]:
 
 
 def attack_insider_slow_leak() -> list[dict]:
-    """Low-and-slow insider: repeated off-hours file access on one finance
-    laptop, spaced ~15-20 min apart so the sliding 30-min correlation window
-    keeps the whole overnight session as one incident, ending in an upload
-    to a personal cloud service (adds an Exfiltration stage)."""
+    """Low-and-slow insider: an off-hours VPN login from a new location,
+    followed by repeated file access on one finance laptop spaced ~15-20 min
+    apart so the sliding 30-min correlation window keeps the whole overnight
+    session as one incident, ending in an upload to a personal cloud
+    service (adds Initial Access and Exfiltration stages alongside the
+    repeated Collection activity)."""
     host, user = "fin-laptop-03", "j.mehta"
     start = DEMO_DATE + timedelta(hours=1, minutes=0)  # 01:00, off-hours
-    out = []
-    t = 0.0
+    out = [make_alert(host, user, "vpn_login_new_city", "Auth", 3, ts(start, 0),
+                       src_ip=fake.ipv4_public(),
+                       raw_message=f"VPN login for {user} from an unusual city, off-hours",
+                       is_true_positive=True)]
+    t = 5.0
     for i in range(24):
         out.append(make_alert(host, user, "unusual_file_access", "EDR", 2, ts(start, t),
                                raw_message=f"off-hours access to finance file share (batch {i + 1})",
                                is_true_positive=True))
         t += random.uniform(12, 20)  # stays well under the 30-min window
     for _ in range(2):
-        out.append(make_alert(host, user, "large_upload_external", "IDS", 4, ts(start, t),
+        out.append(make_alert(host, user, "large_upload_external", "IDS", 5, ts(start, t),
                                dest_ip=fake.ipv4_public(),
                                raw_message="large upload to personal cloud storage",
                                is_true_positive=True))
