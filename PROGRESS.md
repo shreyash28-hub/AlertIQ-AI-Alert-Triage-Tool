@@ -33,9 +33,18 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - **Verified against the blueprint's checkpoint:** 2,970 alerts → 38 incidents (98.7% noise reduction, target ≥95%); 4/4 planted attacks in the top 5 (target 100%); decoy VM ranks 37/38 at score 28.4 (blueprint's own worked example predicts ~28); 0 real attack alerts left in a Low-risk incident.
 - **Two Phase 1 data bugs found and fixed while building this:** benign noise alerts all had a public IP regardless of type (inflated the "external IP" anomaly signal for pure noise — only `blocked_port_scan` should have one); the insider story needed a realistic opening VPN-login-from-new-location alert and a matched exfiltration severity to score above the noise ceiling (see gap #1 below).
 
+### Phase 3 — Backend API ✅
+- `supabase/migrations/001_schema.sql`: 7 tables, applied to the live Supabase project via the SQL Editor. Indexes on `(host, timestamp)`, `(user_name, timestamp)`, `risk_score`. RLS enabled on every table; Realtime on `incidents` + `decisions`.
+- `backend/database.py`: supabase-py client + read/write helpers, batched upserts (500 rows/request).
+- `backend/main.py`: all 6 endpoints from the blueprint's API spec (`/api/generate`, `/api/ingest`, `/api/incidents`, `/api/incidents/{id}`, `/api/incidents/{id}/summarize`, `/api/metrics`).
+- `backend/ai/summarizer.py`: template-only brief for now — the safety-net fallback the blueprint's design rules call for; Phase 4 adds the real Ollama call in front of it.
+- `backend/metrics/mttt.py`: noise reduction, MTTT, top techniques, detection accuracy, decision breakdown.
+- **Gap 4 resolved:** the schema carries every field the app needs (`is_true_positive`, `title`, `alert_count`, `primary_user`, `start_time`/`end_time`, `analyst_note`) — matches `backend/models.py` exactly.
+- **Gap 5 resolved:** only the backend's service key can write `incidents`, but a narrow `SECURITY DEFINER` trigger on `decisions` updates exactly `status`/`analyst_note`/`decided_at` when an analyst records a decision — no wider incidents-write policy needed. Verified live: inserting a decision moved an incident from New → Confirmed with the note and timestamp copied correctly.
+- **Verified end to end against the live database:** `/api/generate` → 2,971 alerts; `/api/ingest` → 38 incidents (matches Phase 2 exactly); all read endpoints, filters, and `/api/metrics` return correct live data.
+
 ## Remaining
 
-- [ ] **Phase 3 — Backend API**: Supabase schema + RLS (note: frontend needs to update `incidents.status`, current RLS draft blocks that) + Auth, FastAPI endpoints.
 - [ ] **Phase 4 — AI summaries**: Phi-4-mini briefs via Ollama, caching, fallback template.
 - [ ] **Phase 5 — Frontend base**: Vite + React + TS + Tailwind + shadcn, layout, API client.
 - [ ] **Phase 6 — Full UI**: Dashboard, Incident detail, Metrics pages, charts, decision buttons.
@@ -49,6 +58,6 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 1. ~~Insider attack may miss top-5 (Phase 1/2).~~ Resolved: spaced within the sliding correlation window (Phase 1), then confirmed top-5 in Phase 2 (rank 3/38, score 83.2) after adding a realistic opening VPN-login-from-new-location alert and matching its exfiltration severity to the other attacks.
 2. ~~Correlation rule gives hundreds of incidents, not ~40 (Phase 2).~~ Resolved: noise/small-group rollup brought it to 38 incidents.
 3. ~~Grouping by external IP / chaining by user can create giant incidents (Phase 2).~~ Resolved: only external IPs link alerts, capped at 5 hosts per IP before it stops being used as a link.
-4. Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3). *Python models already have these fields (`backend/models.py`) — just needs to carry through to the SQL schema.*
-5. RLS blocks the frontend from updating `incidents.status` (Phase 3 / Phase 6).
+4. ~~Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3).~~ Resolved: schema matches `backend/models.py` exactly.
+5. ~~RLS blocks the frontend from updating `incidents.status` (Phase 3 / Phase 6).~~ Resolved: a `SECURITY DEFINER` trigger on `decisions` performs the one narrow update `incidents` needs when an analyst records a decision.
 6. Azure App Service can't reach Ollama on the laptop — briefs must be generated locally and saved to Supabase before the deployed app can show them (Phase 3 API design / Phase 8 deploy).
