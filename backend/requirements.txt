@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+pandas
+faker
+supabase
+python-dotenv
+ollama
