@@ -62,9 +62,15 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - `Dashboard.tsx`: real incident list with risk badges + working "Run triage" button. `IncidentDetail.tsx`/`Metrics.tsx` are working but minimal — Phase 6 builds their full versions.
 - **Verified live in a real browser** (`.claude/launch.json` added so the browser tool can run the Vite dev server): created a persistent demo login (`analyst@alertiq.demo`), confirmed the Phase 3 signup trigger fired; unauthenticated → redirected to `/login`; after login, Dashboard shows all 38 real incidents correctly sorted/badged; Metrics page shows live 98.7% reduction / 4/4 top-5; incident detail shows a real AI brief with correct technique pairing; sign-out works; `npm run build` passes clean.
 
+### Phase 6 — Full UI ✅
+- **Backend, two small additions:** `fetch_incidents()` embeds the asset row (host/type/owner/criticality) via the `primary_host → assets(host)` foreign key; `PUT /api/incidents/{id}/brief` lets an analyst save a manual edit (the blueprint's "analyst can edit the brief" rule needed a write path, since only the backend may write `incidents` directly — same pattern as `/summarize`).
+- **New components:** `RiskBadge`, `StatCard` (count-up, respects reduced-motion), `IncidentTable` (filters + click-through), `AttackChain` (tactics as connected steps with technique IDs, grouped via `lib/mitre.ts` — the same technique/tactic-pairing fix Phase 4 made for the AI prompt, needed again here), `AlertTimeline`, `DecisionButtons` (inserts into `decisions` via supabase-js under the analyst's own id), and `charts/` (2 for Dashboard, 3 for Metrics).
+- **`lib/useRealtime.ts`:** subscribes to the `incidents`/`decisions` Realtime publication and invalidates React Query caches — the dashboard updates live.
+- **Dashboard, IncidentDetail, Metrics** rewritten to their full versions per the blueprint's page specs.
+- **Verified live, including the exact checkpoint** ("analyst can open an incident and mark it False positive"): opened the insider attack incident, its attack chain correctly rendered Initial Access → Collection → Exfiltration; clicked False positive; confirmed directly in Supabase that the decision was recorded under the analyst's id and the Phase 3 trigger updated the status — and the UI badge updated live via Realtime with no page refresh. Also verified Edit-brief saves persist correctly. Re-ran `/api/ingest` afterward for a clean dataset. `npm run build` passes clean.
+
 ## Remaining
 
-- [ ] **Phase 6 — Full UI**: Dashboard, Incident detail, Metrics pages, charts, decision buttons.
 - [ ] **Phase 7 — Animations**: Motion count-ups, list transitions, attack chain, collapse effect.
 - [ ] **Phase 8 — Metrics and pitch**: timed MTTT test, deploy to Azure, slides, demo video.
 
