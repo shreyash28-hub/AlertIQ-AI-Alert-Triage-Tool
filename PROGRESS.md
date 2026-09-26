@@ -24,9 +24,17 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - **Gap resolved:** the insider story is spaced ~15–20 min apart across one ~6.6-hour overnight session, so it stays inside the 30-minute *sliding* correlation window (chain continues as long as consecutive alerts are ≤30 min apart) instead of splitting across nights. Ends with 2 personal-cloud uploads, adding a second MITRE tactic (Collection → Exfiltration) to keep its score above the noise ceiling.
 - `alerts.json` itself is git-ignored (regenerated output, not source); `assets.csv` and `mitre_map.json` are committed as seed/reference data.
 
+### Phase 2 — Triage engine ✅
+- `backend/models.py`: Alert, Asset, Incident Pydantic models (includes the fields the schema gap below flags as missing: title, alert_count, primary_user, start/end time, analyst_note).
+- `backend/engine/normalize.py`, `mitre.py`, `correlate.py`, `scoring.py`, `pipeline.py`: the four-step engine (normalize → correlate → MITRE map → score/rank), tied together by `run_triage()`.
+- `backend/run_triage.py`: standalone checkpoint script — `venv\Scripts\python.exe run_triage.py` prints the summary with no API/DB needed.
+- **Correlation design:** entity + 30-min sliding-window chaining (host/user/external IP) for anything notable; pure background noise and small/mild correlated groups (fewer than 8 alerts, nothing severity ≥4) roll up into one incident per host per day instead of standing alone. Rollups score 0 for kill-chain progression (K), since their alerts were never judged time-correlated — without that, a busy host's unrelated daily alerts could coincidentally span several MITRE tactics and look like a fake multi-stage attack (found and fixed during testing).
+- Two guards against over-merging: only external (public) IPs link alerts; one external IP that would link more than 5 hosts stops being used as a link (looks like a wide scanner, not one incident).
+- **Verified against the blueprint's checkpoint:** 2,970 alerts → 38 incidents (98.7% noise reduction, target ≥95%); 4/4 planted attacks in the top 5 (target 100%); decoy VM ranks 37/38 at score 28.4 (blueprint's own worked example predicts ~28); 0 real attack alerts left in a Low-risk incident.
+- **Two Phase 1 data bugs found and fixed while building this:** benign noise alerts all had a public IP regardless of type (inflated the "external IP" anomaly signal for pure noise — only `blocked_port_scan` should have one); the insider story needed a realistic opening VPN-login-from-new-location alert and a matched exfiltration severity to score above the noise ceiling (see gap #1 below).
+
 ## Remaining
 
-- [ ] **Phase 2 — Triage engine**: normalize, correlate (grouping rule needs a fix so ~40 incidents come out, not hundreds), MITRE mapping, risk scoring.
 - [ ] **Phase 3 — Backend API**: Supabase schema + RLS (note: frontend needs to update `incidents.status`, current RLS draft blocks that) + Auth, FastAPI endpoints.
 - [ ] **Phase 4 — AI summaries**: Phi-4-mini briefs via Ollama, caching, fallback template.
 - [ ] **Phase 5 — Frontend base**: Vite + React + TS + Tailwind + shadcn, layout, API client.
@@ -38,9 +46,9 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 
 (Full detail in memory `blueprint-gaps-to-raise`.)
 
-1. ~~Insider attack may miss top-5 (Phase 1/2).~~ Resolved in Phase 1 by spacing its alerts within the sliding correlation window (see above) — revisit once Phase 2's scoring is built to confirm it actually ranks top-5.
-2. Correlation rule gives hundreds of incidents, not ~40 (Phase 2).
-3. Grouping by external IP / chaining by user can create giant incidents (Phase 2).
-4. Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3).
+1. ~~Insider attack may miss top-5 (Phase 1/2).~~ Resolved: spaced within the sliding correlation window (Phase 1), then confirmed top-5 in Phase 2 (rank 3/38, score 83.2) after adding a realistic opening VPN-login-from-new-location alert and matching its exfiltration severity to the other attacks.
+2. ~~Correlation rule gives hundreds of incidents, not ~40 (Phase 2).~~ Resolved: noise/small-group rollup brought it to 38 incidents.
+3. ~~Grouping by external IP / chaining by user can create giant incidents (Phase 2).~~ Resolved: only external IPs link alerts, capped at 5 hosts per IP before it stops being used as a link.
+4. Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3). *Python models already have these fields (`backend/models.py`) — just needs to carry through to the SQL schema.*
 5. RLS blocks the frontend from updating `incidents.status` (Phase 3 / Phase 6).
 6. Azure App Service can't reach Ollama on the laptop — briefs must be generated locally and saved to Supabase before the deployed app can show them (Phase 3 API design / Phase 8 deploy).
