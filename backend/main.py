@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from ai.summarizer import summarize
+from ai.summarizer import summarize, template_brief
 from database import (create_run, fetch_all_decisions, fetch_all_incidents,
                        fetch_incident, fetch_incidents, finish_run, latest_run,
                        save_alerts, save_assets, save_incidents, update_incident_brief)
@@ -53,6 +53,20 @@ def generate():
     return {"alerts": len(alerts)}
 
 
+def _for_summarizer(incident: dict, alerts_by_id: dict, assets: dict) -> dict:
+    """summarize() wants an incident with its alerts and asset attached
+    (the shape database.fetch_incident() returns); the pipeline's raw
+    incident only has alert_ids, so build that shape here without
+    mutating the incident dict that gets saved to Supabase."""
+    host = incident["primary_host"]
+    asset_info = assets.get(host)
+    return {
+        **incident,
+        "alerts": [alerts_by_id[aid] for aid in incident["alert_ids"] if aid in alerts_by_id],
+        "asset": {"host": host, **asset_info} if asset_info else None,
+    }
+
+
 @app.post("/api/ingest")
 def ingest():
     """Run the full triage pipeline and write the results to Supabase."""
@@ -62,8 +76,13 @@ def ingest():
     save_alerts(run_id, result["alerts"])
 
     incidents = result["incidents"]
+    alerts_by_id = {a["alert_id"]: a for a in result["alerts"]}
+    assets = load_assets()
     for inc in incidents[:TOP_N_SUMMARIZED]:
-        inc["ai_brief"] = summarize(inc)
+        inc["ai_brief"] = summarize(_for_summarizer(inc, alerts_by_id, assets))
+    for inc in incidents[TOP_N_SUMMARIZED:]:
+        # design rule: "low incidents get a template brief" - not no brief
+        inc["ai_brief"] = template_brief(_for_summarizer(inc, alerts_by_id, assets))
     save_incidents(run_id, incidents)
 
     finish_run(run_id, result["total_alerts"], result["total_incidents"], result["duration_ms"])
