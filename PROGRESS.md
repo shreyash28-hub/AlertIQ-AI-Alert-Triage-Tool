@@ -7,7 +7,9 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - Hosting: Azure Static Web Apps (frontend) + Azure App Service (backend). Vercel was considered and dropped.
 - Design: the blueprint's single fixed dark SOC theme was replaced (user request) with a livelier violet-accented palette and real light/dark/system theme support. Fixed red/orange/yellow/grey risk scale and Inter/JetBrains Mono fonts kept. Public routes now exist too: `/` is a marketing landing page, `/signup` lets anyone create an account; the app itself moved to `/app`.
 
-**Demo login:** a test analyst account (`analyst@alertiq.demo`) was created via the Supabase admin API in Phase 5, for local testing. Its password is not recorded here or in git, since this repo is public — reset it from the Supabase dashboard (Authentication → Users) if needed, or ask to create a fresh one. Delete this account before any public deployment.
+**Live deployment** (Phase 8): frontend at [lively-tree-0dbe3e300.2.azurestaticapps.net](https://lively-tree-0dbe3e300.2.azurestaticapps.net), backend at [alertiq-api-shubham29.azurewebsites.net](https://alertiq-api-shubham29.azurewebsites.net). Full steps in `docs/DEPLOYMENT.md`.
+
+**Demo login:** a test analyst account (`analyst@alertiq.demo`) was created via the Supabase admin API in Phase 5, for local testing. Its password is not recorded here or in git, since this repo is public — reset it from the Supabase dashboard (Authentication → Users) if needed, or ask to create a fresh one. **Now that the app is publicly deployed and anyone can sign up, consider deleting this account** (Supabase dashboard → Authentication → Users) rather than leaving a known-name test login sitting on the live site.
 
 ## Done
 
@@ -92,9 +94,16 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 - **Reduced motion**: `MotionConfig reducedMotion="user"` app-wide; the collapse shows its final state immediately; `.lift` is disabled by the media query.
 - **Verified:** `npm run build` (incl. `tsc`) passes; no new lint warnings in the touched files. With a temporary test page (deleted), confirmed the phases switch on schedule, 38 chips render coloured by level (2 Critical, 2 High, 8 Medium, 26 Low in the test data), the connector lines and tactic order are right, and the reduced-motion path renders the final state correctly. **Not verified frame by frame:** the flying-dots motion itself, because the browser pane was hidden (0 animation frames), and the decision-result panel (needs a signed-in session). Watch one Run triage to confirm.
 
+### Phase 8 — Deployment ✅ (slides/demo video/timed MTTT test still open, see Remaining)
+- **Live:** frontend on Azure Static Web Apps ([lively-tree-0dbe3e300.2.azurestaticapps.net](https://lively-tree-0dbe3e300.2.azurestaticapps.net)), backend on Azure App Service ([alertiq-api-shubham29.azurewebsites.net](https://alertiq-api-shubham29.azurewebsites.net)), both free tier, resource group `alertiq-rg` on the "Azure for Students" subscription. Full steps (and the region workaround below) in `docs/DEPLOYMENT.md`.
+- `backend/startup.sh` (gunicorn + uvicorn worker) and `gunicorn` added to `requirements.txt` — the standard App Service (Linux, Python) startup pattern for a FastAPI app.
+- **Region gotcha found and fixed:** this subscription's `RequestDisallowedByAzure` policy rejected the standard `eastus`/`eastus2` regions with no clear list of what's allowed; `centralindia` (App Service) and `eastasia` (Static Web Apps, which only supports a handful of regions at all) worked.
+- **`staticwebapp.config.json` bug found and fixed:** placed at the frontend root initially, where Vite never copies it into `dist/` (only `public/` gets copied) — confirmed missing from the build, moved it into `frontend/public/`, rebuilt, confirmed present, and verified live that a direct load of `/signup` on the deployed site works instead of 404ing.
+- **Verified live, not just deployed:** `/api/generate` and `/api/ingest` both run correctly on the deployed backend (ingest ~1s, since every AI call fails over to the template brief near-instantly — Azure can't reach the laptop's Ollama, exactly as gap 6 below describes); signed up a real test account through the deployed frontend, confirmed it via the Supabase admin API, logged in, and confirmed the Dashboard/Metrics/Live Simulator all load live data from the deployed backend + Supabase. Test account and local deployment artifacts cleaned up afterward.
+
 ## Remaining
 
-- [ ] **Phase 8 — Metrics and pitch**: timed MTTT test, deploy to Azure, slides, demo video.
+- [ ] **Phase 8 — pitch**: timed MTTT test, slides, demo video.
 
 ## Known gaps to raise during the phase they affect
 
@@ -105,7 +114,7 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 3. ~~Grouping by external IP / chaining by user can create giant incidents (Phase 2).~~ Resolved: only external IPs link alerts, capped at 5 hosts per IP before it stops being used as a link.
 4. ~~Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3).~~ Resolved: schema matches `backend/models.py` exactly.
 5. ~~RLS blocks the frontend from updating `incidents.status` (Phase 3 / Phase 6).~~ Resolved: a `SECURITY DEFINER` trigger on `decisions` performs the one narrow update `incidents` needs when an analyst records a decision.
-6. Azure App Service can't reach Ollama on the laptop — briefs must be generated locally and saved to Supabase before the deployed app can show them (Phase 3 API design / Phase 8 deploy).
+6. ~~Azure App Service can't reach Ollama on the laptop — briefs must be generated locally and saved to Supabase before the deployed app can show them (Phase 3 API design / Phase 8 deploy).~~ Confirmed live in Phase 8: the deployed backend's AI calls fail over to the template brief immediately, exactly as designed; run `/api/ingest` from your own machine (with Ollama running) when you want fresh AI-written briefs to appear on the deployed site.
 
 ### Round 1 credibility pass ✅
 - `backend/evaluate.py` (+ `evaluation_results.json`): reproducible metrics on the synthetic data — review-volume reduction, top-k ranking, per-story fragmentation/purity, incident-level precision/recall/FPR, two baselines, 20 other generator seeds, scale test. Generator now labels planted stories with `attack_id` (evaluation only; engine never reads labels) and exposes `build_dataset(seed)`.
