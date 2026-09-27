@@ -6,3 +6,4 @@ faker
 supabase
 python-dotenv
 ollama
+gunicorn
