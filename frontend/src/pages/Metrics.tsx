@@ -30,15 +30,15 @@ export default function Metrics() {
       <h1 className="text-2xl font-semibold tracking-tight">Metrics</h1>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle className="text-base">Triage time: manual vs AlertIQ</CardTitle></CardHeader>
+        <Card className="lift">
+          <CardHeader><CardTitle className="text-base">Estimated triage time (assumes 1 min/alert vs 2 min/incident)</CardTitle></CardHeader>
           <CardContent>
             <MtttChart manualHours={data.mttt_manual_hours} toolHours={data.mttt_tool_hours} />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Noise funnel</CardTitle></CardHeader>
+        <Card className="lift">
+          <CardHeader><CardTitle className="text-base">Alerts to incidents funnel</CardTitle></CardHeader>
           <CardContent>
             <NoiseFunnelChart
               totalAlerts={data.total_alerts}
@@ -48,8 +48,8 @@ export default function Metrics() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Detection check</CardTitle></CardHeader>
+        <Card className="lift">
+          <CardHeader><CardTitle className="text-base">Detection check (synthetic test data)</CardTitle></CardHeader>
           <CardContent className="flex items-center gap-3">
             {allFound ? (
               <CheckCircle2 className="size-8 text-green-500" />
@@ -63,21 +63,21 @@ export default function Metrics() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lift">
           <CardHeader><CardTitle className="text-base">Analyst decisions</CardTitle></CardHeader>
           <CardContent>
             <DecisionBreakdownChart decisions={data.decisions} />
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lift">
           <CardHeader><CardTitle className="text-base">Risk score distribution</CardTitle></CardHeader>
           <CardContent>
             <RiskScoreDistributionChart incidents={incidents ?? []} />
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lift">
           <CardHeader><CardTitle className="text-base">Incidents by asset owner</CardTitle></CardHeader>
           <CardContent>
             <IncidentsByOwnerChart incidents={incidents ?? []} />

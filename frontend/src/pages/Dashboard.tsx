@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AlertTriangle, Clock, Layers, Loader2, Play, TrendingDown } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { useReducedMotion } from "motion/react"
 import { toast } from "sonner"
 import { IncidentTable, type IncidentFilterState } from "@/components/IncidentTable"
 import { StatCard } from "@/components/StatCard"
+import { TriageCollapse, type CollapsePhase } from "@/components/TriageCollapse"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { IncidentsByLevelChart } from "@/components/charts/IncidentsByLevelChart"
 import { TopTechniquesChart } from "@/components/charts/TopTechniquesChart"
@@ -11,13 +13,17 @@ import { api } from "@/lib/api"
 import { useIncidentsRealtime } from "@/lib/useRealtime"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import type { Incident } from "@/types"
+import type { Incident, RiskLevel } from "@/types"
 
 // How long the "incidents pop in one by one" reveal takes to finish for a
 // large batch, so it stays satisfying (not a blur) without dragging on for
 // a big dataset - see revealIncidents() below.
 const REVEAL_TOTAL_MS = 2800
 const REVEAL_MIN_STEP_MS = 40
+// The collapse animation plays before the reveal starts (see TriageCollapse).
+const COLLAPSE_MS = 1100
+// How long the "N alerts -> M incidents" banner stays after the reveal starts.
+const BANNER_LINGER_MS = 2500
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
@@ -25,6 +31,10 @@ export default function Dashboard() {
   const [lastRun, setLastRun] = useState<{ started_at: string; total_alerts: number } | null>(null)
   const [revealed, setRevealed] = useState<Incident[] | null>(null)
   const revealTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const reduceMotion = useReducedMotion()
+  const [phase, setPhase] = useState<CollapsePhase>("idle")
+  const [collapseAlerts, setCollapseAlerts] = useState(0)
+  const [collapseLevels, setCollapseLevels] = useState<RiskLevel[]>([])
 
   useIncidentsRealtime()
 
@@ -85,6 +95,11 @@ export default function Dashboard() {
 
   const ingest = useMutation({
     mutationFn: () => api.ingest(),
+    onMutate: () => {
+      setCollapseAlerts(0)
+      setCollapseLevels([])
+      setPhase("running")
+    },
     onSuccess: async (result) => {
       toast.success(`Triage complete: ${result.alerts.toLocaleString()} alerts -> ${result.incidents} incidents`)
       queryClient.invalidateQueries({ queryKey: ["metrics"] })
@@ -101,9 +116,20 @@ export default function Dashboard() {
       const fresh = await api.listIncidents()
       queryClient.setQueryData(["incidents", "all"], fresh)
       queryClient.setQueryData(["incidents", { level: "", status: "", technique: "" }], fresh)
+
+      // collapse first (alerts fly into incident chips), then reveal the rows
+      setCollapseAlerts(result.alerts)
+      setCollapseLevels(fresh.map((i) => i.risk_level))
+      setPhase("collapsing")
+      if (!reduceMotion) await new Promise((r) => setTimeout(r, COLLAPSE_MS))
+      setPhase("done")
       revealIncidents(fresh)
+      setTimeout(() => setPhase("idle"), BANNER_LINGER_MS)
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      setPhase("idle")
+      toast.error(err.message)
+    },
   })
 
   const techniqueOptions = [...new Set((allIncidents ?? []).flatMap((i) => i.techniques))].sort()
@@ -127,29 +153,31 @@ export default function Dashboard() {
         </Button>
       </div>
 
+      <TriageCollapse phase={phase} alerts={collapseAlerts} levels={collapseLevels} />
+
       {metrics && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard label="Total alerts" value={metrics.total_alerts} icon={AlertTriangle} />
           <StatCard label="Incidents" value={metrics.total_incidents} icon={Layers} />
-          <StatCard label="Noise reduced" value={metrics.noise_reduction_pct} suffix="%" decimals={1} icon={TrendingDown} />
-          <StatCard label="Triage time saved" value={triageTimeSavedHours} suffix="h" decimals={1} icon={Clock} />
+          <StatCard label="Review volume cut" value={metrics.noise_reduction_pct} suffix="%" decimals={1} icon={TrendingDown} />
+          <StatCard label="Est. triage time saved" value={triageTimeSavedHours} suffix="h" decimals={1} icon={Clock} />
         </div>
       )}
 
       {metrics && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
+          <Card className="lift">
             <CardHeader><CardTitle className="text-base">Incidents by risk level</CardTitle></CardHeader>
             <CardContent><IncidentsByLevelChart byLevel={metrics.by_level} /></CardContent>
           </Card>
-          <Card>
+          <Card className="lift">
             <CardHeader><CardTitle className="text-base">Top MITRE techniques</CardTitle></CardHeader>
             <CardContent><TopTechniquesChart topTechniques={metrics.top_techniques} /></CardContent>
           </Card>
         </div>
       )}
 
-      <Card>
+      <Card className="lift">
         <CardHeader>
           <CardTitle className="text-base">
             Incidents {displayIncidents ? `(${revealed ? `${revealed.length}/${incidents?.length ?? revealed.length}` : displayIncidents.length})` : ""}

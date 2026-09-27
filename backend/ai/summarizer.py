@@ -6,6 +6,7 @@ template so the demo never breaks."""
 
 import json
 import os
+import re
 from pathlib import Path
 
 import ollama
@@ -117,6 +118,22 @@ def ollama_brief(incident: dict) -> str:
     return text
 
 
+_TECHNIQUE_RE = re.compile(r"(?<![A-Za-z0-9])T\d{4}(?:\.\d{3})?(?![0-9])")
+
+
+def is_grounded(text: str, incident: dict) -> bool:
+    """Guardrail: the AI may only mention ATT&CK technique IDs that the
+    deterministic engine actually attached to this incident. Phi-4-mini
+    invented codes like T1186/T1220 in testing (see PROGRESS.md, Phase 4);
+    any brief that cites a technique we did not observe is rejected and the
+    deterministic template is used instead. (It checks technique IDs only -
+    it cannot prove every sentence is true, so briefs stay editable and the
+    analyst makes the decision.)"""
+    allowed = set(incident.get("mitre_techniques") or incident.get("techniques") or [])
+    cited = set(_TECHNIQUE_RE.findall(text))
+    return cited <= allowed
+
+
 def _is_routine(incident: dict) -> bool:
     """True for a correlate.py rollup: its kill_chain_stages/tactics is
     forced to [] even when individual alerts still carry a technique (see
@@ -141,7 +158,11 @@ def summarize(incident: dict) -> str:
     if _is_routine(incident):
         return template_brief(incident)
     try:
-        return ollama_brief(incident)
+        text = ollama_brief(incident)
+        if not is_grounded(text, incident):
+            print("[ai.summarizer] brief cited a technique not in the incident data; using template brief")
+            return template_brief(incident)
+        return text
     except Exception as exc:
         print(f"[ai.summarizer] Ollama call failed ({exc!r}); using template brief")
         return template_brief(incident)

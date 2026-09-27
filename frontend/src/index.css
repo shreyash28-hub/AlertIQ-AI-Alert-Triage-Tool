@@ -183,3 +183,21 @@
   -webkit-background-clip: text;
   color: transparent;
 }
+
+
+/* Phase 7: cards lift slightly on hover (blueprint: "signals clickability").
+   Skipped entirely for users who ask for reduced motion. */
+.lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.25);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .lift:hover {
+    transition: none;
+    transform: none;
+  }
+}

@@ -28,8 +28,8 @@ const steps = [
 
 const stats = [
   { value: "98.7%", label: "fewer items to review" },
-  { value: "4/4", label: "planted attacks ranked in the top 5" },
-  { value: "<2h", label: "triage time per shift, down from ~50h" },
+  { value: "4/4", label: "planted attacks ranked in the top 5 (synthetic test data)" },
+  { value: "38", label: "incidents to review, from 2,970 alerts" },
 ]
 
 const tech = [

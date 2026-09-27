@@ -35,7 +35,7 @@ DEMO_DATE = datetime(2026, 9, 26, 0, 0, 0)  # all alerts fall on this one day
 # The blueprint's "~85% / ~10% / ~5%" split doesn't leave room for the
 # decoy's own "200+ alerts" example, so the decoy is generated as its own
 # bucket alongside real noise, rather than squeezed into the 5% attack
-# budget. Totals below sum to exactly 3,000.
+# budget. Totals below (plus ~90 attack alerts) give the 2,970-alert dataset.
 NUM_BENIGN = 2440
 NUM_SUSPICIOUS = 210
 NUM_DECOY = 230
@@ -290,10 +290,17 @@ def attack_insider_slow_leak() -> list[dict]:
     return out
 
 
-def main():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def build_dataset(seed: int = SEED) -> tuple[list[dict], list[dict]]:
+    """Returns (assets, alerts) for a given seed. Re-seeds first so any seed
+    is fully reproducible (evaluate.py uses this to test other seeds).
+    Planted-attack alerts also carry an `attack_id` ground-truth label; it
+    is only read by evaluate.py, never by the triage engine."""
+    global _alert_seq
+    random.seed(seed)
+    Faker.seed(seed)
+    _alert_seq = 0
+
     assets = build_assets()
-    write_assets_csv(assets)
     filler_hosts = [a["host"] for a in assets if a["host"] not in
                     {"payroll-srv-01", "dc-01", "hr-laptop-07", "fin-laptop-03", "test-vm-01",
                      "jump-host-02", "eng-lt-14", "eng-srv-21"}]
@@ -302,13 +309,25 @@ def main():
     alerts += benign_noise(NUM_BENIGN, filler_hosts)
     alerts += suspicious_but_harmless(NUM_SUSPICIOUS, filler_hosts)
     alerts += decoy_test_vm(NUM_DECOY)
-    alerts += attack_brute_force_payroll()
-    alerts += attack_phishing_hr_laptop()
-    alerts += attack_lateral_movement_dc()
-    alerts += attack_insider_slow_leak()
+    for attack_id, builder in [
+        ("brute_force_payroll", attack_brute_force_payroll),
+        ("phishing_hr_laptop", attack_phishing_hr_laptop),
+        ("lateral_movement_dc", attack_lateral_movement_dc),
+        ("insider_slow_leak", attack_insider_slow_leak),
+    ]:
+        story = builder()
+        for a in story:
+            a["attack_id"] = attack_id
+        alerts += story
 
     random.shuffle(alerts)  # alert_id order stays chronological-ish; shuffle so file order isn't grouped by type
+    return assets, alerts
 
+
+def main():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    assets, alerts = build_dataset()
+    write_assets_csv(assets)
     out_path = DATA_DIR / "alerts.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(alerts, f, indent=2)

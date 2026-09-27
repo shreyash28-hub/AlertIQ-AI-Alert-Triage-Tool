@@ -1,6 +1,6 @@
 # AlertIQ — AI Alert Triage Tool
 
-Turns ~3,000 noisy security alerts a day into ~40 ranked incidents, each with a short AI-written brief, so one analyst can triage a shift in under 2 hours instead of 50.
+Correlates ~3,000 noisy security alerts a day into ~40 ranked incidents, each with a short AI-written brief, so one analyst reviews a few dozen items instead of thousands. (On our synthetic dataset: 2,970 alerts to 38 incidents. Analyst time saved has not been measured yet.)
 
 Microsoft Hackathon, Advanced #25 — "3,000 Alerts, One Analyst".
 
@@ -37,3 +37,13 @@ pip install -r requirements.txt
 copy .env.example .env    # then fill in the Supabase values
 uvicorn main:app --reload # http://localhost:8000
 ```
+
+## Evaluate (reproducible)
+
+```bash
+cd backend
+venv\Scripts\python.exe evaluate.py          # metrics, baselines, 20 other seeds, scale test -> evaluation_results.json
+venv\Scripts\python.exe tests/test_summarizer_guard.py   # AI guardrail + fallback tests
+```
+
+All results are on our own synthetic dataset; see docs/JUDGE_PREP.md for what can and cannot be claimed.

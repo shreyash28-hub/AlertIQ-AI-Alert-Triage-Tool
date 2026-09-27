@@ -6,7 +6,7 @@ import type { LucideIcon } from "lucide-react"
 
 // Numbers count up on load - shows the scale of the reduction (blueprint's
 // Motion animation rules). Skips the animation under prefers-reduced-motion.
-function useCountUp(target: number, durationMs = 800) {
+function useCountUp(target: number, durationMs = 500) {
   const reduceMotion = useReducedMotion()
   const [value, setValue] = useState(reduceMotion ? target : 0)
 

@@ -40,13 +40,21 @@ export function AttackChain({ techniques }: { techniques: string[] }) {
             </div>
           </motion.div>
           {i < steps.length - 1 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, delay: i * 0.15 + 0.1 }}
-            >
-              <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-            </motion.div>
+            <div className="flex items-center">
+              <motion.div
+                className="h-px w-6 origin-left bg-primary/50"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.2, delay: i * 0.15 + 0.1 }}
+              />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.1, delay: i * 0.15 + 0.3 }}
+              >
+                <ArrowRight className="-ml-1 size-4 shrink-0 text-primary/60" />
+              </motion.div>
+            </div>
           )}
         </div>
       ))}

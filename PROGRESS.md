@@ -83,9 +83,17 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
   3. **The serious one:** `database.py`'s Supabase client was cached forever (`@lru_cache`), holding one long-lived connection. After ~30 min of a running dev server, Supabase closed it; httpx doesn't retry a dead pooled connection, so every call — not just the long `/api/ingest` — started failing with `RemoteProtocolError`, and a failed-partway ingest left a stub `triage_runs` row (`total_alerts=0`) that the dashboard displayed as "latest run" (seen live: stat cards flashing "Total alerts: 0" / "-1.3h"). Fixed two ways: the client now refreshes every 4 minutes instead of forever, and `latest_run()` only considers a run that actually finished (`duration_ms is not null`), so a partial failure of any cause can't poison the dashboard again.
 - **Verified live:** landing page (all sections visible after the fix), theme toggle (light/dark), signup (both a rejected invalid email and a real signup reaching "check your email"), the fixed sidebar (stays put on scroll), Run triage's progressive reveal, all 6 Metrics charts, and a clean re-ingest after the connection fix completing in 66s with correct numbers immediately. `npm run build` passes clean. Test accounts cleaned up afterward.
 
+### Phase 7 — Animations ✅
+- **Collapse effect** (`components/TriageCollapse.tsx`, wired into Dashboard's Run triage): while the pipeline runs, a dot field drifts; on success the dots fly into per-incident clusters and one chip per incident (coloured by its real risk level, top risk first) pops in, with the "N alerts -> M incidents" caption. The table's one-by-one reveal starts after it.
+- **Page transitions**: `AppLayout` fades/slides each route change in 200 ms.
+- **Decision feedback**: after a decision the form slides out and a result panel takes its place (Confirmed green, Dismissed grey, Escalated orange, with a "Change decision" button); table rows for decided incidents tint green / orange / fade back.
+- **Attack chain**: connector lines now draw in (scaleX) before each arrow head, in sequence.
+- **Card hover lift** (`.lift` in `index.css`) on Dashboard and Metrics cards; count-ups shortened from 800 to 500 ms.
+- **Reduced motion**: `MotionConfig reducedMotion="user"` app-wide; the collapse shows its final state immediately; `.lift` is disabled by the media query.
+- **Verified:** `npm run build` (incl. `tsc`) passes; no new lint warnings in the touched files. With a temporary test page (deleted), confirmed the phases switch on schedule, 38 chips render coloured by level (2 Critical, 2 High, 8 Medium, 26 Low in the test data), the connector lines and tactic order are right, and the reduced-motion path renders the final state correctly. **Not verified frame by frame:** the flying-dots motion itself, because the browser pane was hidden (0 animation frames), and the decision-result panel (needs a signed-in session). Watch one Run triage to confirm.
+
 ## Remaining
 
-- [ ] **Phase 7 — Animations**: Motion count-ups, list transitions, attack chain, collapse effect.
 - [ ] **Phase 8 — Metrics and pitch**: timed MTTT test, deploy to Azure, slides, demo video.
 
 ## Known gaps to raise during the phase they affect
@@ -98,3 +106,10 @@ Updated after each completed task. See [docs/AlertIQ_Project_Blueprint.docx](doc
 4. ~~Schema missing `is_true_positive` (alerts) and title/alert_count/primary_user/start_time/end_time/analyst_note (incidents) (Phase 3).~~ Resolved: schema matches `backend/models.py` exactly.
 5. ~~RLS blocks the frontend from updating `incidents.status` (Phase 3 / Phase 6).~~ Resolved: a `SECURITY DEFINER` trigger on `decisions` performs the one narrow update `incidents` needs when an analyst records a decision.
 6. Azure App Service can't reach Ollama on the laptop — briefs must be generated locally and saved to Supabase before the deployed app can show them (Phase 3 API design / Phase 8 deploy).
+
+### Round 1 credibility pass ✅
+- `backend/evaluate.py` (+ `evaluation_results.json`): reproducible metrics on the synthetic data — review-volume reduction, top-k ranking, per-story fragmentation/purity, incident-level precision/recall/FPR, two baselines, 20 other generator seeds, scale test. Generator now labels planted stories with `attack_id` (evaluation only; engine never reads labels) and exposes `build_dataset(seed)`.
+- `ai/summarizer.py`: `is_grounded()` rejects any AI brief citing an ATT&CK technique the engine did not attach; falls back to the template. Tests: `backend/tests/test_summarizer_guard.py`.
+- Wording fixes: "noise reduction" -> "review volume"; MTTT labelled as an assumption (1 min/alert vs 2 min/incident, never measured); removed the unmeasured "<2h vs ~50h" claim from the landing page and README.
+- Precision notes: 2,971 raw alerts = 2,970 after exact-duplicate removal; the decoy VM is 2 incidents (ranks 37 and 38); a routine rollup on qa-srv-21 scores 59.5 (rank 5), just under the 60 "High" line.
+- Judge prep and claim table: `docs/JUDGE_PREP.md`.

@@ -6,6 +6,7 @@ import { motion } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { RiskBadge } from "@/components/RiskBadge"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -103,7 +104,12 @@ export function IncidentTable({
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.4) }}
               onClick={() => navigate(`/app/incidents/${inc.incident_id}`)}
-              className="cursor-pointer border-b transition-colors hover:bg-muted/50"
+              className={cn(
+                "cursor-pointer border-b transition-[background-color,opacity] duration-300 hover:bg-muted/50",
+                inc.status === "Confirmed" && "bg-green-500/10",
+                inc.status === "Escalated" && "bg-risk-high-bg",
+                inc.status === "False positive" && "opacity-50",
+              )}
             >
               <TableCell className="text-muted-foreground">{i + 1}</TableCell>
               <TableCell><RiskBadge level={inc.risk_level} /></TableCell>
