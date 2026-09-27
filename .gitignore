@@ -15,6 +15,7 @@ dist/
 
 # Generated data
 backend/data/alerts.json
+backend/data/assets.csv
 backend/evaluation_results.json
 
 # Editors / OS

@@ -23,6 +23,7 @@ from engine.normalize import load_assets
 from engine.pipeline import run_triage
 from generator.generate_alerts import main as generate_dataset
 from metrics.mttt import compute_metrics
+import simulator
 
 app = FastAPI(title="AlertIQ API")
 
@@ -45,13 +46,14 @@ DATA_DIR = Path(__file__).parent / "data"
 
 @app.post("/api/generate")
 def generate():
-    """Create a fresh synthetic dataset and save the asset inventory to
-    Supabase. (Alerts themselves are written on /api/ingest, once they've
-    been through the pipeline and have a run_id.)"""
-    generate_dataset()
+    """Create a fresh synthetic dataset (a new random seed each call - see
+    generate_alerts.main()) and save the asset inventory to Supabase.
+    (Alerts themselves are written on /api/ingest, once they've been
+    through the pipeline and have a run_id.)"""
+    seed = generate_dataset()
     save_assets(load_assets())
     alerts = json.loads((DATA_DIR / "alerts.json").read_text(encoding="utf-8"))
-    return {"alerts": len(alerts)}
+    return {"alerts": len(alerts), "seed": seed}
 
 
 def _for_summarizer(incident: dict, alerts_by_id: dict, assets: dict) -> dict:
@@ -68,9 +70,37 @@ def _for_summarizer(incident: dict, alerts_by_id: dict, assets: dict) -> dict:
     }
 
 
+def _to_frontend_incident(incident: dict, assets: dict) -> dict:
+    """The engine's incident shape uses mitre_techniques/kill_chain_stages;
+    the frontend (and the Supabase schema it's normally reading from) uses
+    techniques/tactics - same key-naming mismatch ai/summarizer.py already
+    has to handle. The simulator returns engine-shaped incidents directly
+    (no database round trip), so remap them here to match what
+    IncidentTable etc. actually expect, embedding the asset the same way
+    fetch_incidents() does."""
+    host = incident["primary_host"]
+    asset_info = assets.get(host)
+    return {
+        **incident,
+        "techniques": incident["mitre_techniques"],
+        "tactics": incident["kill_chain_stages"],
+        "asset": {"host": host, **asset_info} if asset_info else None,
+    }
+
+
 @app.post("/api/ingest")
 def ingest():
-    """Run the full triage pipeline and write the results to Supabase."""
+    """Generate a fresh random dataset, then run the full triage pipeline
+    and write the results to Supabase. The blueprint keeps /api/generate
+    and /api/ingest as two separate steps, but the frontend only ever
+    exposed one "Run triage" button, so every click just re-processed the
+    same fixed-seed alerts.json - looking stale/identical on every run.
+    Folding a fresh generate() in here is the direct fix; /api/generate
+    stays available on its own for anything that wants just the dataset."""
+    seed = generate_dataset()
+    assets = load_assets()
+    save_assets(assets)  # filler host names are random per seed too - keep the embedded-asset join valid
+
     result = run_triage()
     run_id = create_run()
 
@@ -78,7 +108,6 @@ def ingest():
 
     incidents = result["incidents"]
     alerts_by_id = {a["alert_id"]: a for a in result["alerts"]}
-    assets = load_assets()
     for inc in incidents[:TOP_N_SUMMARIZED]:
         inc["ai_brief"] = summarize(_for_summarizer(inc, alerts_by_id, assets))
     for inc in incidents[TOP_N_SUMMARIZED:]:
@@ -90,6 +119,7 @@ def ingest():
 
     return {
         "run_id": run_id,
+        "seed": seed,
         "alerts": result["total_alerts"],
         "incidents": result["total_incidents"],
         "duration_ms": result["duration_ms"],
@@ -149,3 +179,32 @@ def metrics():
     run = latest_run()
     total_alerts = run["total_alerts"] if run else 0
     return compute_metrics(incidents, total_alerts, decisions)
+
+
+# --- Live Simulator (demo feature, not part of the blueprint's API spec) ---
+# Nothing here touches Supabase - see simulator.py's module docstring for
+# why this stays entirely in-memory.
+
+@app.post("/api/simulate/start")
+def simulate_start():
+    """Clears the live buffer, so a new demo session starts from zero."""
+    simulator.reset()
+    return {"status": "started"}
+
+
+@app.post("/api/simulate/tick")
+def simulate_tick():
+    """Adds one batch of new alerts (anchored to right now) and re-scores
+    the whole buffer with the same engine every other endpoint uses."""
+    result = simulator.tick()
+    assets = load_assets()
+    result["incidents"] = [_to_frontend_incident(inc, assets) for inc in result["incidents"]]
+    return result
+
+
+@app.post("/api/simulate/stop")
+def simulate_stop():
+    """Clears the live buffer. Idempotent with /start - either ends a
+    session cleanly before the next one begins."""
+    simulator.reset()
+    return {"status": "stopped"}

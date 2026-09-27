@@ -10,9 +10,12 @@ Run:
     cd backend
     venv\\Scripts\\python.exe generator/generate_alerts.py
 
-Everything is seeded (random.seed / Faker.seed) so re-running produces the
-same dataset. alerts.json is git-ignored (regenerated data); assets.csv and
-mitre_map.json are committed as seed/reference data.
+main()/the API default to a fresh random seed each call (see main()'s
+docstring) so repeated demo runs don't look identical; pass an explicit
+seed (build_dataset(seed) or `python generate_alerts.py`'s CLI) for a
+reproducible dataset - evaluate.py always does. alerts.json and assets.csv
+are both git-ignored (regenerated output, not stable source); mitre_map.json
+is committed as reference data.
 """
 
 import csv
@@ -118,7 +121,8 @@ def make_alert(host, user, alert_type, source, severity, timestamp,
     }
 
 
-def benign_noise(n: int, hosts: list[str]) -> list[dict]:
+def benign_noise(n: int, hosts: list[str], anchor: datetime = DEMO_DATE,
+                  window_minutes: float = 24 * 60) -> list[dict]:
     kinds = [
         ("single_failed_login", "Auth", (1, 2), "single failed login for {user}"),
         ("av_scan_clean", "EDR", (1, 1), "scheduled AV scan completed, no threats found"),
@@ -140,14 +144,15 @@ def benign_noise(n: int, hosts: list[str]) -> list[dict]:
         out.append(make_alert(
             host=random.choice(hosts), user=user, alert_type=alert_type, source=source,
             severity=random.randint(lo, hi),
-            timestamp=ts(DEMO_DATE, random.uniform(0, 24 * 60)),
+            timestamp=ts(anchor, random.uniform(0, window_minutes)),
             src_ip=ip,
             raw_message=tmpl.format(user=user, ip=ip or ""),
         ))
     return out
 
 
-def suspicious_but_harmless(n: int, hosts: list[str]) -> list[dict]:
+def suspicious_but_harmless(n: int, hosts: list[str], anchor: datetime = DEMO_DATE,
+                             window_minutes: float = 24 * 60) -> list[dict]:
     kinds = [
         ("powershell_exec", "EDR", (2, 3), "admin ran a PowerShell script for scheduled maintenance"),
         ("vpn_login_new_city", "Auth", (2, 3), "VPN login for {user} from a new but plausible city"),
@@ -160,7 +165,7 @@ def suspicious_but_harmless(n: int, hosts: list[str]) -> list[dict]:
         out.append(make_alert(
             host=random.choice(hosts), user=user, alert_type=alert_type, source=source,
             severity=random.randint(lo, hi),
-            timestamp=ts(DEMO_DATE, random.uniform(0, 24 * 60)),
+            timestamp=ts(anchor, random.uniform(0, window_minutes)),
             raw_message=tmpl.format(user=user),
         ))
     return out
@@ -182,10 +187,11 @@ def decoy_test_vm(n: int) -> list[dict]:
     return out
 
 
-def attack_brute_force_payroll() -> list[dict]:
+def attack_brute_force_payroll(start: datetime | None = None) -> list[dict]:
     """Brute force -> data theft on the payroll server."""
     host, user = "payroll-srv-01", "svc_backup"
-    start = DEMO_DATE + timedelta(hours=2, minutes=10)  # 02:10
+    if start is None:
+        start = DEMO_DATE + timedelta(hours=2, minutes=10)  # 02:10
     attacker_ip = fake.ipv4_public()
     out = []
     t = 0.0
@@ -216,10 +222,11 @@ def attack_brute_force_payroll() -> list[dict]:
     return out
 
 
-def attack_phishing_hr_laptop() -> list[dict]:
+def attack_phishing_hr_laptop(start: datetime | None = None) -> list[dict]:
     """Phishing -> malware on an HR laptop."""
     host, user = "hr-laptop-07", fake.user_name()
-    start = DEMO_DATE + timedelta(hours=10, minutes=5)
+    if start is None:
+        start = DEMO_DATE + timedelta(hours=10, minutes=5)
     c2_ip = fake.ipv4_public()
     out = [
         make_alert(host, user, "phishing_link_click", "Email", 3, ts(start, 0),
@@ -238,12 +245,13 @@ def attack_phishing_hr_laptop() -> list[dict]:
     return out
 
 
-def attack_lateral_movement_dc() -> list[dict]:
+def attack_lateral_movement_dc(start: datetime | None = None) -> list[dict]:
     """Lateral movement toward the domain controller."""
     entry_host = "eng-lt-14"
     hop_hosts = ["jump-host-02", "eng-srv-21", "dc-01"]
     user = "svc_admin"
-    start = DEMO_DATE + timedelta(hours=1, minutes=30)
+    if start is None:
+        start = DEMO_DATE + timedelta(hours=1, minutes=30)
     out = [make_alert(entry_host, user, "credential_dump", "EDR", 5, ts(start, 0),
                        raw_message="credentials dumped from LSASS memory", is_true_positive=True)]
     t = 5
@@ -262,7 +270,7 @@ def attack_lateral_movement_dc() -> list[dict]:
     return out
 
 
-def attack_insider_slow_leak() -> list[dict]:
+def attack_insider_slow_leak(start: datetime | None = None) -> list[dict]:
     """Low-and-slow insider: an off-hours VPN login from a new location,
     followed by repeated file access on one finance laptop spaced ~15-20 min
     apart so the sliding 30-min correlation window keeps the whole overnight
@@ -270,7 +278,8 @@ def attack_insider_slow_leak() -> list[dict]:
     service (adds Initial Access and Exfiltration stages alongside the
     repeated Collection activity)."""
     host, user = "fin-laptop-03", "j.mehta"
-    start = DEMO_DATE + timedelta(hours=1, minutes=0)  # 01:00, off-hours
+    if start is None:
+        start = DEMO_DATE + timedelta(hours=1, minutes=0)  # 01:00, off-hours
     out = [make_alert(host, user, "vpn_login_new_city", "Auth", 3, ts(start, 0),
                        src_ip=fake.ipv4_public(),
                        raw_message=f"VPN login for {user} from an unusual city, off-hours",
@@ -324,22 +333,35 @@ def build_dataset(seed: int = SEED) -> tuple[list[dict], list[dict]]:
     return assets, alerts
 
 
-def main():
+def main(seed: int | None = None) -> int:
+    """seed=None (the default for the CLI and /api/generate) picks a fresh
+    random seed each call, so repeated runs give different alerts instead
+    of the same fixed dataset every time - that fixed-seed reproducibility
+    is still available (and still what evaluate.py uses) by passing an
+    explicit seed. Returns the seed actually used."""
+    if seed is None:
+        seed = random.SystemRandom().randint(0, 2**31 - 1)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    assets, alerts = build_dataset()
+    assets, alerts = build_dataset(seed)
     write_assets_csv(assets)
     out_path = DATA_DIR / "alerts.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(alerts, f, indent=2)
 
     tp = sum(1 for a in alerts if a["is_true_positive"])
+    print(f"seed: {seed}")
     print(f"wrote {out_path}")
     print(f"total alerts: {len(alerts)}")
     print(f"  benign noise:            {NUM_BENIGN}")
     print(f"  suspicious but harmless: {NUM_SUSPICIOUS}")
     print(f"  decoy (test-vm-01):      {NUM_DECOY}")
     print(f"  planted attack alerts:   {tp} (across 4 stories)")
+    return seed
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--seed", type=int, default=None,
+                         help="reproducible dataset (default: a fresh random seed each run)")
+    main(seed=parser.parse_args().seed)

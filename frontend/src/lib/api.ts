@@ -57,4 +57,18 @@ export const api = {
     }),
 
   getMetrics: () => request<Metrics>("/api/metrics"),
+
+  // Live Simulator (demo feature) - entirely in-memory on the backend,
+  // never written to Supabase. See backend/simulator.py.
+  simulateStart: () => request<{ status: string }>("/api/simulate/start", { method: "POST" }),
+  simulateTick: () => request<SimulateTickResult>("/api/simulate/tick", { method: "POST" }),
+  simulateStop: () => request<{ status: string }>("/api/simulate/stop", { method: "POST" }),
+}
+
+export interface SimulateTickResult {
+  new_alert_count: number
+  total_alerts: number
+  total_incidents: number
+  incidents: Incident[]
+  attack_started: string | null
 }

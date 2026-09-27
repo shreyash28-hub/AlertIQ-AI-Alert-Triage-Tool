@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { LayoutDashboard, LogOut, Radio, Shield, BarChart3 } from "lucide-react"
+import { LayoutDashboard, LogOut, Radio, Shield, BarChart3, Activity } from "lucide-react"
 import { NavLink } from "react-router-dom"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +24,7 @@ export function Sidebar() {
   const links = [
     { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, badge: pendingCount },
     { to: "/app/metrics", label: "Metrics", icon: BarChart3, end: false, badge: 0 },
+    { to: "/app/simulator", label: "Live Simulator", icon: Activity, end: false, badge: 0 },
   ]
 
   return (

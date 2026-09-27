@@ -7,6 +7,7 @@ import Landing from "@/pages/Landing"
 import Login from "@/pages/Login"
 import Metrics from "@/pages/Metrics"
 import Signup from "@/pages/Signup"
+import Simulator from "@/pages/Simulator"
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="incidents/:id" element={<IncidentDetail />} />
         <Route path="metrics" element={<Metrics />} />
+        <Route path="simulator" element={<Simulator />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -38,11 +38,17 @@ export function IncidentTable({
   filters,
   onFiltersChange,
   techniqueOptions,
+  disableRowClick = false,
 }: {
   incidents: Incident[]
   filters: IncidentFilterState
   onFiltersChange: (filters: IncidentFilterState) => void
   techniqueOptions: string[]
+  /** The Live Simulator's incidents are never persisted, so their ids
+   * aren't real (and could even collide with a real incident's id) -
+   * opening /app/incidents/:id for one would 404 or show the wrong
+   * incident. Set this to make rows inert instead of clickable. */
+  disableRowClick?: boolean
 }) {
   const navigate = useNavigate()
 
@@ -103,9 +109,10 @@ export function IncidentTable({
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.4) }}
-              onClick={() => navigate(`/app/incidents/${inc.incident_id}`)}
+              onClick={disableRowClick ? undefined : () => navigate(`/app/incidents/${inc.incident_id}`)}
               className={cn(
-                "cursor-pointer border-b transition-[background-color,opacity] duration-300 hover:bg-muted/50",
+                "border-b transition-[background-color,opacity] duration-300",
+                disableRowClick ? "cursor-default" : "cursor-pointer hover:bg-muted/50",
                 inc.status === "Confirmed" && "bg-green-500/10",
                 inc.status === "Escalated" && "bg-risk-high-bg",
                 inc.status === "False positive" && "opacity-50",
